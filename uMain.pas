@@ -79,8 +79,12 @@ end;
 
 procedure TfrmMain.btnRefreshClick(Sender: TObject);
 begin
-  Self.Refresh;
-  Self.LoadPrefs;
+  Self.FLoading:= True;
+  try
+    Self.Refresh;
+  finally
+    Self.FLoading:= False;
+  end;
 end;
 
 procedure TfrmMain.chkStartWithWindowsClick(Sender: TObject);
@@ -292,6 +296,7 @@ begin
   end;
   lstConnections.Width:= lstConnections.Width + 1;
   lstConnections.Width:= lstConnections.Width - 1;
+  LoadRecon;
 end;
 
 procedure TfrmMain.ShowHide1Click(Sender: TObject);
