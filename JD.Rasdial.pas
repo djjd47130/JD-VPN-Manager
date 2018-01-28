@@ -111,8 +111,6 @@ type
     FDomain: String;
     FCallBackNumber: String;
     FPhoneNumber: String;
-
-    FConnected: Boolean;
     procedure SetTitle(const Value: String);
     procedure SetConnected(const Value: Boolean);
     procedure GetInfo;
@@ -319,13 +317,19 @@ end;
 procedure TVPNConnection.SetConnected(const Value: Boolean);
 begin
   //TODO: Connect or disconnect VPN...
+  if Value then begin
+    //Connect...
 
-  FConnected := Value;
+  end else begin
+    //Disconnect...
+
+  end;
 end;
 
 procedure TVPNConnection.SetTitle(const Value: String);
 begin
   //TODO: Check if in edit mode.....
+
   FTitle := Value;
 end;
 
@@ -338,7 +342,6 @@ procedure TVPNConnection.GetInfo;
 var
   P: TRASDialParams;
 begin
-  //Fetch detailed information about this VPN connection...
   P:= GetDialParams;
   FUsername:= StrPas(P.szUserName);
   FPassword:= StrPas(P.szPassword);
@@ -373,9 +376,9 @@ begin
   if FOwner.RasAvailable and Assigned(FOwner.FRasApi.GetConnectStatus) then begin
     FillChar(Result, SizeOf(TRASConnStatus), #0);
     Result.dwSize:= SizeOf(TRASConnStatus);
-    R:= FOwner.FRasApi.GetConnectStatus(FConn.rasConn, Result);
+    R:= FOwner.FRasApi.GetConnectStatus(FConn.rasConn, @Result);
     if R <> ERROR_SUCCESS then begin
-      case True of
+      case R of
         ERROR_NOT_ENOUGH_MEMORY: begin
           raise Exception.Create('Failed to get status: Not enough memory.');
         end;

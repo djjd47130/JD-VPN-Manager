@@ -78,8 +78,8 @@ object frmMain: TfrmMain
   end
   object chkStartWithWindows: TToggleSwitch
     Left = 258
-    Top = 104
-    Width = 73
+    Top = 106
+    Width = 87
     Height = 20
     Cursor = crHandPoint
     Anchors = [akTop, akRight]
@@ -88,9 +88,9 @@ object frmMain: TfrmMain
     OnClick = chkStartWithWindowsClick
   end
   object btnRefresh: TBitBtn
-    Left = 247
-    Top = 154
-    Width = 75
+    Left = 258
+    Top = 146
+    Width = 138
     Height = 25
     Anchors = [akTop, akRight]
     Caption = 'Refresh'
