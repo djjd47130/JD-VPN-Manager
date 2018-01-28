@@ -3,12 +3,13 @@ unit uMain;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
+  Winapi.Windows, Winapi.Messages,
+  System.SysUtils, System.Variants, System.Classes, System.Win.Registry,
+  Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
   Vcl.ComCtrls, Vcl.ExtCtrls, Vcl.Mask,
-  JvExMask, JvSpin, JvComponentBase, JvRas32,
   Vcl.Buttons, Vcl.Menus,
-  System.Win.Registry, Vcl.WinXCtrls;
+  Vcl.WinXCtrls, Vcl.Samples.Spin,
+  JvComponentBase, JvRas32;
 
 const
   REG_KEY = 'Software\JD Software\JD VPN Manager\';
@@ -21,7 +22,6 @@ type
     Ras: TJvRas32;
     lstConnections: TListView;
     Tmr: TTimer;
-    txtReconnectSecs: TJvSpinEdit;
     Label1: TLabel;
     Tray: TTrayIcon;
     TrayMenu: TPopupMenu;
@@ -32,6 +32,7 @@ type
     chkStartWithWindows: TToggleSwitch;
     Label2: TLabel;
     btnRefresh: TBitBtn;
+    txtReconnectSecs: TSpinEdit;
     procedure FormCreate(Sender: TObject);
     procedure lstConnectionsItemChecked(Sender: TObject; Item: TListItem);
     procedure TmrTimer(Sender: TObject);
@@ -275,7 +276,6 @@ procedure TfrmMain.lstConnectionsItemChecked(Sender: TObject; Item: TListItem);
 begin
   if not FLoading then
     SavePrefs;
-  //Refresh; //EVIL!!! Causes Stack Overflow!!!
 end;
 
 procedure TfrmMain.Refresh;

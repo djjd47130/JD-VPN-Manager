@@ -76,19 +76,6 @@ object frmMain: TfrmMain
     ViewStyle = vsReport
     OnItemChecked = lstConnectionsItemChecked
   end
-  object txtReconnectSecs: TJvSpinEdit
-    Left = 258
-    Top = 32
-    Width = 138
-    Height = 24
-    ButtonKind = bkStandard
-    MaxValue = 999999999.000000000000000000
-    MinValue = 10.000000000000000000
-    Value = 10.000000000000000000
-    Anchors = [akTop, akRight]
-    TabOrder = 1
-    OnChange = txtReconnectSecsChange
-  end
   object chkStartWithWindows: TToggleSwitch
     Left = 258
     Top = 104
@@ -96,7 +83,7 @@ object frmMain: TfrmMain
     Height = 20
     Cursor = crHandPoint
     Anchors = [akTop, akRight]
-    TabOrder = 2
+    TabOrder = 1
     ThumbWidth = 20
     OnClick = chkStartWithWindowsClick
   end
@@ -107,8 +94,20 @@ object frmMain: TfrmMain
     Height = 25
     Anchors = [akTop, akRight]
     Caption = 'Refresh'
-    TabOrder = 3
+    TabOrder = 2
     OnClick = btnRefreshClick
+  end
+  object txtReconnectSecs: TSpinEdit
+    Left = 258
+    Top = 35
+    Width = 138
+    Height = 26
+    Anchors = [akTop, akRight]
+    MaxValue = 99999999
+    MinValue = 10
+    TabOrder = 3
+    Value = 20
+    OnChange = txtReconnectSecsChange
   end
   object Ras: TJvRas32
     KeepConnected = True

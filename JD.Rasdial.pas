@@ -1,9 +1,19 @@
-unit JD.Ras;
+unit JD.Rasdial;
 
 (*
   JD Ras Dial Utilities
 
   UNDER DEVELOPMENT AND NOT IN USE
+
+  This unit is a custom implementation of the Windows Rasdial API.
+  It wraps the API calls defined in JD.RasApi.pas into an
+  easy-to-use Delphi component.
+
+  Main Component: TVPNManager
+  - Wraps all Windows VPN implementation
+  - Populates a list of individual configured VPN connections
+  - Provides events to trigger when certain VPN related things occur
+  -
 
 *)
 
@@ -13,16 +23,16 @@ uses
   System.Classes, System.SysUtils, System.Generics.Collections,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls,
-  Ras32;
+  JD.RasApi;
 
 const
-  RsRasDllName = 'RASAPI32.DLL';
+  RADDIAL_DLL_FILENAME = 'RASAPI32.DLL';
 
 type
   TVPNManager = class;
   TVPNConnection = class;
 
-
+  TVPNConnectionEvent = procedure(Sender: TObject; Connection: TVPNConnection) of object;
 
   TVPNManager = class(TComponent)
   private
@@ -34,6 +44,7 @@ type
     FPhoneBookPath: TFilename;
     FAvailable: Boolean;
     FKeepConnected: Boolean;
+
     FRasDial: TRasDial;
     FRasEnumConnections: TRasEnumConnections;
     FRasEnumEntries: TRasEnumEntries;
@@ -44,29 +55,31 @@ type
     FRasValidateEntryName: TRasValidateEntryName;
     FRasCreatePhonebookEntry: TRasCreatePhonebookEntry;
     FRasEditPhonebookEntry: TRasEditPhonebookEntry;
-    FOnRetryAuthentication: TNotifyEvent;
-    FOnAllDevicesConnected: TNotifyEvent;
-    FOnPortOpened: TNotifyEvent;
-    FOnAuthCallback: TNotifyEvent;
-    FOnWaitForModemReset: TNotifyEvent;
-    FOnOpenPort: TNotifyEvent;
-    FOnWaitForCallBack: TNotifyEvent;
-    FOnConnected: TNotifyEvent;
-    FOnAuthenticated: TNotifyEvent;
-    FOnInteractive: TNotifyEvent;
-    FOnPrepareForCallback: TNotifyEvent;
-    FOnPasswordExpired: TNotifyEvent;
-    FOnDisconnected: TNotifyEvent;
-    FOnAuthNotify: TNotifyEvent;
-    FOnAuthLinkSpeed: TNotifyEvent;
-    FOnAuthProject: TNotifyEvent;
-    FOnAuthChangePassword: TNotifyEvent;
-    FOnDeviceConnected: TNotifyEvent;
-    FOnAuthRetry: TNotifyEvent;
-    FOnAuthenticate: TNotifyEvent;
-    FOnConnectDevice: TNotifyEvent;
-    FOnReAuthenticate: TNotifyEvent;
-    FOnAuthAck: TNotifyEvent;
+
+    FOnRetryAuthentication: TVPNConnectionEvent;
+    FOnAllDevicesConnected: TVPNConnectionEvent;
+    FOnPortOpened: TVPNConnectionEvent;
+    FOnAuthCallback: TVPNConnectionEvent;
+    FOnWaitForModemReset: TVPNConnectionEvent;
+    FOnOpenPort: TVPNConnectionEvent;
+    FOnWaitForCallBack: TVPNConnectionEvent;
+    FOnConnected: TVPNConnectionEvent;
+    FOnAuthenticated: TVPNConnectionEvent;
+    FOnInteractive: TVPNConnectionEvent;
+    FOnPrepareForCallback: TVPNConnectionEvent;
+    FOnPasswordExpired: TVPNConnectionEvent;
+    FOnDisconnected: TVPNConnectionEvent;
+    FOnAuthNotify: TVPNConnectionEvent;
+    FOnAuthLinkSpeed: TVPNConnectionEvent;
+    FOnAuthProject: TVPNConnectionEvent;
+    FOnAuthChangePassword: TVPNConnectionEvent;
+    FOnDeviceConnected: TVPNConnectionEvent;
+    FOnAuthRetry: TVPNConnectionEvent;
+    FOnAuthenticate: TVPNConnectionEvent;
+    FOnConnectDevice: TVPNConnectionEvent;
+    FOnReAuthenticate: TVPNConnectionEvent;
+    FOnAuthAck: TVPNConnectionEvent;
+
     procedure SetPhoneBookPath(const Value: TFilename);
     procedure WndProc(var Msg: TMessage);
   public
@@ -79,29 +92,29 @@ type
     property PhoneBookPath: TFilename read FPhoneBookPath write SetPhoneBookPath;
     property KeepConnected: Boolean read FKeepConnected write FKeepConnected default False;
 
-    property OnOpenPort: TNotifyEvent read FOnOpenPort write FOnOpenPort;
-    property OnPortOpened: TNotifyEvent read FOnPortOpened write FOnPortOpened;
-    property OnConnectDevice: TNotifyEvent read FOnConnectDevice write FOnConnectDevice;
-    property OnDeviceConnected: TNotifyEvent read FOnDeviceConnected write FOnDeviceConnected;
-    property OnAllDevicesConnected: TNotifyEvent read FOnAllDevicesConnected write FOnAllDevicesConnected;
-    property OnAuthenticate: TNotifyEvent read FOnAuthenticate write FOnAuthenticate;
-    property OnAuthNotify: TNotifyEvent read FOnAuthNotify write FOnAuthNotify;
-    property OnAuthRetry: TNotifyEvent read FOnAuthRetry write FOnAuthRetry;
-    property OnAuthCallback: TNotifyEvent read FOnAuthCallback write FOnAuthCallback;
-    property OnAuthChangePassword: TNotifyEvent read FOnAuthChangePassword write FOnAuthChangePassword;
-    property OnAuthProject: TNotifyEvent read FOnAuthProject write FOnAuthProject;
-    property OnAuthLinkSpeed: TNotifyEvent read FOnAuthLinkSpeed write FOnAuthLinkSpeed;
-    property OnAuthAck: TNotifyEvent read FOnAuthAck write FOnAuthAck;
-    property OnReAuthenticate: TNotifyEvent read FOnReAuthenticate write FOnReAuthenticate;
-    property OnAuthenticated: TNotifyEvent read FOnAuthenticated write FOnAuthenticated;
-    property OnPrepareForCallback: TNotifyEvent read FOnPrepareForCallback write FOnPrepareForCallback;
-    property OnWaitForModemReset: TNotifyEvent read FOnWaitForModemReset write FOnWaitForModemReset;
-    property OnInteractive: TNotifyEvent read FOnInteractive write FOnInteractive;
-    property OnRetryAuthentication: TNotifyEvent read FOnRetryAuthentication write FOnRetryAuthentication;
-    property OnPasswordExpired: TNotifyEvent read FOnPasswordExpired write FOnPasswordExpired;
-    property OnConnected: TNotifyEvent read FOnConnected write FOnConnected;
-    property OnDisconnected: TNotifyEvent read FOnDisconnected write FOnDisconnected;
-    property OnWaitForCallBack: TNotifyEvent read FOnWaitForCallBack write FOnWaitForCallBack;
+    property OnOpenPort: TVPNConnectionEvent read FOnOpenPort write FOnOpenPort;
+    property OnPortOpened: TVPNConnectionEvent read FOnPortOpened write FOnPortOpened;
+    property OnConnectDevice: TVPNConnectionEvent read FOnConnectDevice write FOnConnectDevice;
+    property OnDeviceConnected: TVPNConnectionEvent read FOnDeviceConnected write FOnDeviceConnected;
+    property OnAllDevicesConnected: TVPNConnectionEvent read FOnAllDevicesConnected write FOnAllDevicesConnected;
+    property OnAuthenticate: TVPNConnectionEvent read FOnAuthenticate write FOnAuthenticate;
+    property OnAuthNotify: TVPNConnectionEvent read FOnAuthNotify write FOnAuthNotify;
+    property OnAuthRetry: TVPNConnectionEvent read FOnAuthRetry write FOnAuthRetry;
+    property OnAuthCallback: TVPNConnectionEvent read FOnAuthCallback write FOnAuthCallback;
+    property OnAuthChangePassword: TVPNConnectionEvent read FOnAuthChangePassword write FOnAuthChangePassword;
+    property OnAuthProject: TVPNConnectionEvent read FOnAuthProject write FOnAuthProject;
+    property OnAuthLinkSpeed: TVPNConnectionEvent read FOnAuthLinkSpeed write FOnAuthLinkSpeed;
+    property OnAuthAck: TVPNConnectionEvent read FOnAuthAck write FOnAuthAck;
+    property OnReAuthenticate: TVPNConnectionEvent read FOnReAuthenticate write FOnReAuthenticate;
+    property OnAuthenticated: TVPNConnectionEvent read FOnAuthenticated write FOnAuthenticated;
+    property OnPrepareForCallback: TVPNConnectionEvent read FOnPrepareForCallback write FOnPrepareForCallback;
+    property OnWaitForModemReset: TVPNConnectionEvent read FOnWaitForModemReset write FOnWaitForModemReset;
+    property OnInteractive: TVPNConnectionEvent read FOnInteractive write FOnInteractive;
+    property OnRetryAuthentication: TVPNConnectionEvent read FOnRetryAuthentication write FOnRetryAuthentication;
+    property OnPasswordExpired: TVPNConnectionEvent read FOnPasswordExpired write FOnPasswordExpired;
+    property OnConnected: TVPNConnectionEvent read FOnConnected write FOnConnected;
+    property OnDisconnected: TVPNConnectionEvent read FOnDisconnected write FOnDisconnected;
+    property OnWaitForCallBack: TVPNConnectionEvent read FOnWaitForCallBack write FOnWaitForCallBack;
   end;
 
   TVPNConnection = class(TObject)
@@ -118,8 +131,72 @@ type
 
 implementation
 
-uses
-  JvJVCLUtils;
+const
+  cUtilWindowExClass: TWndClass = (
+    style: 0;
+    lpfnWndProc: nil;
+    cbClsExtra: 0;
+    cbWndExtra: SizeOf(TMethod);
+    hInstance: 0;
+    hIcon: 0;
+    hCursor: 0;
+    hbrBackground: 0;
+    lpszMenuName: nil;
+    lpszClassName: 'TPUtilWindowEx');
+
+
+function StdWndProc(Window: THandle; Message, WParam: WPARAM;
+  LParam: LPARAM): LRESULT; stdcall;
+var
+  Msg: Winapi.Messages.TMessage;
+  WndProc: TWndMethod;
+begin
+  TMethod(WndProc).Code := Pointer(GetWindowLongPtr(Window, 0));
+  TMethod(WndProc).Data := Pointer(GetWindowLongPtr(Window, SizeOf(Pointer)));
+  if Assigned(WndProc) then
+  begin
+    Msg.Msg := Message;
+    Msg.WParam := WParam;
+    Msg.LParam := LParam;
+    Msg.Result := 0;
+    WndProc(Msg);
+    Result := Msg.Result;
+  end
+  else
+    Result := DefWindowProc(Window, Message, WParam, LParam);
+end;
+
+function AllocateHWndEx(Method: TWndMethod; const AClassName: string = ''): THandle;
+var
+  TempClass: TWndClass;
+  UtilWindowExClass: TWndClass;
+  ClassRegistered: Boolean;
+begin
+  UtilWindowExClass := cUtilWindowExClass;
+  UtilWindowExClass.hInstance := HInstance;
+  UtilWindowExClass.lpfnWndProc := @DefWindowProc;
+  if AClassName <> '' then
+    UtilWindowExClass.lpszClassName := PChar(AClassName);
+
+  ClassRegistered := Winapi.Windows.GetClassInfo(HInstance, UtilWindowExClass.lpszClassName,
+    TempClass);
+  if not ClassRegistered or (TempClass.lpfnWndProc <> @DefWindowProc) then
+  begin
+    if ClassRegistered then
+      Winapi.Windows.UnregisterClass(UtilWindowExClass.lpszClassName, HInstance);
+    Winapi.Windows.RegisterClass(UtilWindowExClass);
+  end;
+  Result := Winapi.Windows.CreateWindowEx(Winapi.Windows.WS_EX_TOOLWINDOW, UtilWindowExClass.lpszClassName,
+    '', Winapi.Windows.WS_POPUP, 0, 0, 0, 0, 0, 0, HInstance, nil);
+
+  if Assigned(Method) then
+  begin
+    SetWindowLongPtr(Result, 0, LONG_PTR(TMethod(Method).Code));
+    SetWindowLongPtr(Result, SizeOf(TMethod(Method).Code), LONG_PTR(TMethod(Method).Data));
+    SetWindowLongPtr(Result, GWLP_WNDPROC, LONG_PTR(@StdWndProc));
+  end;
+end;
+
 
 { TVPNManager }
 
@@ -129,6 +206,7 @@ begin
   FConnections:= TObjectList<TVPNConnection>.Create(True);
   FKeepConnected := False;
   FPhoneBookPath := '';
+
   //FPassword := '';
   //FDeviceName := '';
   //FUsername := '';
@@ -138,14 +216,16 @@ begin
   //FCallBackNumber := '';
   //FDomain := '';
   //FConnection := 0;
+
+  //Acquire owner handle...
   if AOwner is TWinControl then
     FPHandle := (AOwner as TWinControl).Handle
   else
     // (rom) is this safe?
     FPHandle := GetForegroundWindow;
-  //FEntryIndex := -1;
 
-  FDll := SafeLoadLibrary(RsRasDllName);
+  //Load Rasdial Library...
+  FDll := SafeLoadLibrary(RADDIAL_DLL_FILENAME);
   if FDll <> 0 then
   begin
     FRasDial := GetProcAddress(FDll, {$IFDEF UNICODE}'RasDialW'{$ELSE}'RasDialA'{$ENDIF UNICODE});
@@ -159,7 +239,7 @@ begin
     FRasCreatePhonebookEntry := GetProcAddress(FDll, {$IFDEF UNICODE}'RasCreatePhonebookEntryW'{$ELSE}'RasCreatePhonebookEntryA'{$ENDIF UNICODE});
     FRasEditPhonebookEntry := GetProcAddress(FDll, {$IFDEF UNICODE}'RasEditPhonebookEntryW'{$ELSE}'RasEditPhonebookEntryA'{$ENDIF UNICODE});
 
-    FHandle := JvJVCLUtils.AllocateHWndEx(WndProc);
+    FHandle := AllocateHWndEx(WndProc);
     FRASEvent := RegisterWindowMessage(RASDialEvent);
     if FRASEvent = 0 then
       FRASEvent := WM_RASDialEvent;

@@ -3,9 +3,10 @@ program JDVPNMGR;
 uses
   Vcl.Forms,
   uMain in 'uMain.pas' {frmMain},
-  JD.Ras in 'JD.Ras.pas',
+  JD.Rasdial in 'JD.Rasdial.pas',
   Vcl.Themes,
-  Vcl.Styles;
+  Vcl.Styles,
+  JD.RasApi in 'JD.RasApi.pas';
 
 {$R *.res}
 
