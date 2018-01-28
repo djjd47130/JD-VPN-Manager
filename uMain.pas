@@ -1,5 +1,15 @@
 unit uMain;
 
+(*
+  JD VPN Manager Application - Main Form
+
+  Helps a Windows user manage the VPNs in Windows,
+  most specifically keeping VPNs connected at all times.
+
+
+
+*)
+
 interface
 
 uses

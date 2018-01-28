@@ -6,12 +6,19 @@ unit JD.RasApi;
   This unit is a custom implementation of the Windows Rasdial API.
   It encapsulates all possible Winapi calls to perform Rasdial operations.
 
+  NOTE: For ease of use, you can use a TRasApi record type,
+    create it using CreateRasApi and destroy it using DestroyRasApi.
+    It takes care of loading the library, acquiring proc addresses,
+    and setting up a handle to receive notification messages.
+
+
 *)
 
 interface
 
 uses
-  Windows;
+  Winapi.Windows, Winapi.Messages,
+  System.Classes;
 
 {$HPPEMIT '#include "ras.h"'}
 
@@ -45,6 +52,7 @@ type
   {$EXTERNALSYM HRASConn}
 
 const
+  RADDIAL_DLL_FILENAME = 'RASAPI32.DLL';
   RASDialEvent = 'RASDialEvent';
   WM_RASDialEvent = $0CCCD;
   RASCS_Paused = $1000;
@@ -52,6 +60,8 @@ const
   RASBase = 600;
   Success = 0;
   PENDING = (RASBase + 0);
+
+  //Error Codes
   ERROR_INVALID_PORT_HANDLE = (RASBase + 1);
   ERROR_PORT_ALREADY_OPEN = (RASBase + 2);
   ERROR_BUFFER_TOO_SMALL = (RASBase + 3);
@@ -175,6 +185,7 @@ const
   ERROR_NO_ISDN_CHANNELS_AVAILABLE = (RASBase + 121);
 
 const
+  //Windows Message Event Types
   RASCS_OpenPort = 0;
   RASCS_PortOpened = 1;
   RASCS_ConnectDevice = 2;
@@ -200,7 +211,7 @@ const
   RASCS_PasswordExpired = RASCS_Paused + 3;
 
   RASCS_Connected = RASCS_Done;
-  RASCS_DisConnected = RASCS_Done + 1;
+  RASCS_Disconnected = RASCS_Done + 1;
 
 type
   PRASConn = ^TRASConn;
@@ -249,6 +260,10 @@ type
     dwSize: Longint;
     szEntryName: array [0..RAS_MaxEntryName] of Char;
   end;
+
+
+
+
 
   TRasDial = function(
     lpRasDialExtensions: PRASDIALEXTENSIONS; // Pointer to function extensions data
@@ -310,6 +325,147 @@ type
     lpszEntryName: PChar // Pointer to the phone-book entry name
     ): DWORD; stdcall;
 
+  TRasApi = record
+    Available: Boolean;
+    Dll: THandle;
+    Handle: THandle;
+    PHandle: THandle;
+    RASEvent: Word;
+    Dial: TRasDial;
+    EnumConnections: TRasEnumConnections;
+    EnumEntries: TRasEnumEntries;
+    GetConnectStatus: TRasGetConnectStatus;
+    GetErrorstring: TRasGetErrorstring;
+    HangUp: TRasHangUp;
+    GetEntryDialParams: TRasGetEntryDialParams;
+    ValidateEntryName: TRasValidateEntryName;
+    CreatePhonebookEntry: TRasCreatePhonebookEntry;
+    EditPhonebookEntry: TRasEditPhonebookEntry;
+  end;
+
+function CreateRasApi(AOwner: TComponent; AWndProc: TWndMethod): TRasApi;
+procedure DestroyRasApi(var ARasApi: TRasApi);
+
 implementation
+
+uses
+  System.SysUtils,
+  Vcl.Controls;
+
+const
+  cUtilWindowExClass: TWndClass = (
+    style: 0;
+    lpfnWndProc: nil;
+    cbClsExtra: 0;
+    cbWndExtra: SizeOf(TMethod);
+    hInstance: 0;
+    hIcon: 0;
+    hCursor: 0;
+    hbrBackground: 0;
+    lpszMenuName: nil;
+    lpszClassName: 'TPUtilWindowEx');
+
+function StdWndProc(Window: THandle; Message, WParam: WPARAM;
+  LParam: LPARAM): LRESULT; stdcall;
+var
+  Msg: Winapi.Messages.TMessage;
+  WndProc: TWndMethod;
+begin
+  TMethod(WndProc).Code := Pointer(GetWindowLongPtr(Window, 0));
+  TMethod(WndProc).Data := Pointer(GetWindowLongPtr(Window, SizeOf(Pointer)));
+  if Assigned(WndProc) then
+  begin
+    Msg.Msg := Message;
+    Msg.WParam := WParam;
+    Msg.LParam := LParam;
+    Msg.Result := 0;
+    WndProc(Msg);
+    Result := Msg.Result;
+  end
+  else
+    Result := DefWindowProc(Window, Message, WParam, LParam);
+end;
+
+function AllocateHWndEx(Method: TWndMethod; const AClassName: string = ''): THandle;
+var
+  TempClass: TWndClass;
+  UtilWindowExClass: TWndClass;
+  ClassRegistered: Boolean;
+begin
+  UtilWindowExClass := cUtilWindowExClass;
+  UtilWindowExClass.hInstance := HInstance;
+  UtilWindowExClass.lpfnWndProc := @DefWindowProc;
+  if AClassName <> '' then
+    UtilWindowExClass.lpszClassName := PChar(AClassName);
+
+  ClassRegistered := Winapi.Windows.GetClassInfo(HInstance, UtilWindowExClass.lpszClassName,
+    TempClass);
+  if not ClassRegistered or (TempClass.lpfnWndProc <> @DefWindowProc) then
+  begin
+    if ClassRegistered then
+      Winapi.Windows.UnregisterClass(UtilWindowExClass.lpszClassName, HInstance);
+    Winapi.Windows.RegisterClass(UtilWindowExClass);
+  end;
+  Result := Winapi.Windows.CreateWindowEx(Winapi.Windows.WS_EX_TOOLWINDOW, UtilWindowExClass.lpszClassName,
+    '', Winapi.Windows.WS_POPUP, 0, 0, 0, 0, 0, 0, HInstance, nil);
+
+  if Assigned(Method) then
+  begin
+    SetWindowLongPtr(Result, 0, LONG_PTR(TMethod(Method).Code));
+    SetWindowLongPtr(Result, SizeOf(TMethod(Method).Code), LONG_PTR(TMethod(Method).Data));
+    SetWindowLongPtr(Result, GWLP_WNDPROC, LONG_PTR(@StdWndProc));
+  end;
+end;
+
+procedure DeallocateHWndEx(Wnd: THandle);
+begin
+  Winapi.Windows.DestroyWindow(Wnd);
+end;
+
+function CreateRasApi(AOwner: TComponent; AWndProc: TWndMethod): TRasApi;
+begin
+  //Acquire owner handle...
+  if AOwner is TWinControl then
+    Result.PHandle := (AOwner as TWinControl).Handle
+  else
+    Result.PHandle := GetForegroundWindow; //TODO: Is this safe?
+
+  //Load Rasdial Library...
+  Result.Dll := SafeLoadLibrary(RADDIAL_DLL_FILENAME);
+  if Result.Dll <> 0 then begin
+
+    //Acquire procedure addresses...
+    Result.Dial := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasDialW'{$ELSE}'RasDialA'{$ENDIF UNICODE});
+    Result.EnumConnections := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasEnumConnectionsW'{$ELSE}'RasEnumConnectionsA'{$ENDIF UNICODE});
+    Result.EnumEntries := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasEnumEntriesW'{$ELSE}'RasEnumEntriesA'{$ENDIF UNICODE});
+    Result.GetConnectStatus := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasGetConnectStatusW'{$ELSE}'RasGetConnectStatusA'{$ENDIF UNICODE});
+    Result.GetErrorstring := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasGetErrorstringW'{$ELSE}'RasGetErrorstringA'{$ENDIF UNICODE});
+    Result.HangUp := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasHangUpW'{$ELSE}'RasHangUpA'{$ENDIF UNICODE});
+    Result.GetEntryDialParams := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasGetEntryDialParamsW'{$ELSE}'RasGetEntryDialParamsA'{$ENDIF UNICODE});
+    Result.ValidateEntryName := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasValidateEntryNameW'{$ELSE}'RasValidateEntryNameA'{$ENDIF UNICODE});
+    Result.CreatePhonebookEntry := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasCreatePhonebookEntryW'{$ELSE}'RasCreatePhonebookEntryA'{$ENDIF UNICODE});
+    Result.EditPhonebookEntry := GetProcAddress(Result.Dll, {$IFDEF UNICODE}'RasEditPhonebookEntryW'{$ELSE}'RasEditPhonebookEntryA'{$ENDIF UNICODE});
+
+    //Prepare events...
+    Result.Handle := AllocateHWndEx(AWndProc);
+    Result.RASEvent := RegisterWindowMessage(RASDialEvent);
+    if Result.RASEvent = 0 then
+      Result.RASEvent := WM_RASDialEvent;
+
+  end;
+
+  //Check if Ras is available at all...
+  Result.Available := (Result.Dll <> 0) and Assigned(Result.Dial);
+
+end;
+
+procedure DestroyRasApi(var ARasApi: TRasApi);
+begin
+  if ARasApi.Available then begin
+    FreeLibrary(ARasApi.Dll);
+    DeallocateHWndEx(ARasApi.Handle);
+  end;
+  ARasApi.Dll := 0;
+end;
 
 end.

@@ -25,9 +25,6 @@ uses
   Vcl.Controls,
   JD.RasApi;
 
-const
-  RADDIAL_DLL_FILENAME = 'RASAPI32.DLL';
-
 type
   TVPNManager = class;
   TVPNConnection = class;
@@ -36,25 +33,11 @@ type
 
   TVPNManager = class(TComponent)
   private
-    FHandle: THandle;
-    FPHandle: THandle;
-    FDll: THandle;
-    FRASEvent: Word;
+    FRasApi: TRasApi;
+
     FConnections: TObjectList<TVPNConnection>;
     FPhoneBookPath: TFilename;
-    FAvailable: Boolean;
     FKeepConnected: Boolean;
-
-    FRasDial: TRasDial;
-    FRasEnumConnections: TRasEnumConnections;
-    FRasEnumEntries: TRasEnumEntries;
-    FRasGetConnectStatus: TRasGetConnectStatus;
-    FRasGetErrorstring: TRasGetErrorstring;
-    FRasHangUp: TRasHangUp;
-    FRasGetEntryDialParams: TRasGetEntryDialParams;
-    FRasValidateEntryName: TRasValidateEntryName;
-    FRasCreatePhonebookEntry: TRasCreatePhonebookEntry;
-    FRasEditPhonebookEntry: TRasEditPhonebookEntry;
 
     FOnRetryAuthentication: TVPNConnectionEvent;
     FOnAllDevicesConnected: TVPNConnectionEvent;
@@ -82,12 +65,13 @@ type
 
     procedure SetPhoneBookPath(const Value: TFilename);
     procedure WndProc(var Msg: TMessage);
+    function GetAvailable: Boolean;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure RefreshConnections;
     function ConnectionCount: Integer;
-    property RasAvailable: Boolean read FAvailable;
+    property RasAvailable: Boolean read GetAvailable;
   published
     property PhoneBookPath: TFilename read FPhoneBookPath write SetPhoneBookPath;
     property KeepConnected: Boolean read FKeepConnected write FKeepConnected default False;
@@ -120,7 +104,7 @@ type
   TVPNConnection = class(TObject)
   private
     FOwner: TVPNManager;
-    //FConn: TRASConn;
+    FConn: TRASConn;
     FTitle: String;
     FUsername: String;
     FPassword: String;
@@ -132,82 +116,17 @@ type
     procedure SetTitle(const Value: String);
     procedure SetConnected(const Value: Boolean);
     procedure GetInfo;
+    function GetConnected: Boolean;
+    function GetStatus: TRASConnStatus;
+    function GetDialParams: TRASDialParams;
   public
     constructor Create(AOwner: TVPNManager);
     destructor Destroy; override;
     property Title: String read FTitle write SetTitle;
-    property Connected: Boolean read FConnected write SetConnected;
+    property Connected: Boolean read GetConnected write SetConnected;
   end;
 
 implementation
-
-const
-  cUtilWindowExClass: TWndClass = (
-    style: 0;
-    lpfnWndProc: nil;
-    cbClsExtra: 0;
-    cbWndExtra: SizeOf(TMethod);
-    hInstance: 0;
-    hIcon: 0;
-    hCursor: 0;
-    hbrBackground: 0;
-    lpszMenuName: nil;
-    lpszClassName: 'TPUtilWindowEx');
-
-function StdWndProc(Window: THandle; Message, WParam: WPARAM;
-  LParam: LPARAM): LRESULT; stdcall;
-var
-  Msg: Winapi.Messages.TMessage;
-  WndProc: TWndMethod;
-begin
-  TMethod(WndProc).Code := Pointer(GetWindowLongPtr(Window, 0));
-  TMethod(WndProc).Data := Pointer(GetWindowLongPtr(Window, SizeOf(Pointer)));
-  if Assigned(WndProc) then
-  begin
-    Msg.Msg := Message;
-    Msg.WParam := WParam;
-    Msg.LParam := LParam;
-    Msg.Result := 0;
-    WndProc(Msg);
-    Result := Msg.Result;
-  end
-  else
-    Result := DefWindowProc(Window, Message, WParam, LParam);
-end;
-
-function AllocateHWndEx(Method: TWndMethod; const AClassName: string = ''): THandle;
-var
-  TempClass: TWndClass;
-  UtilWindowExClass: TWndClass;
-  ClassRegistered: Boolean;
-begin
-  UtilWindowExClass := cUtilWindowExClass;
-  UtilWindowExClass.hInstance := HInstance;
-  UtilWindowExClass.lpfnWndProc := @DefWindowProc;
-  if AClassName <> '' then
-    UtilWindowExClass.lpszClassName := PChar(AClassName);
-
-  ClassRegistered := Winapi.Windows.GetClassInfo(HInstance, UtilWindowExClass.lpszClassName,
-    TempClass);
-  if not ClassRegistered or (TempClass.lpfnWndProc <> @DefWindowProc) then
-  begin
-    if ClassRegistered then
-      Winapi.Windows.UnregisterClass(UtilWindowExClass.lpszClassName, HInstance);
-    Winapi.Windows.RegisterClass(UtilWindowExClass);
-  end;
-  Result := Winapi.Windows.CreateWindowEx(Winapi.Windows.WS_EX_TOOLWINDOW, UtilWindowExClass.lpszClassName,
-    '', Winapi.Windows.WS_POPUP, 0, 0, 0, 0, 0, 0, HInstance, nil);
-
-  if Assigned(Method) then
-  begin
-    SetWindowLongPtr(Result, 0, LONG_PTR(TMethod(Method).Code));
-    SetWindowLongPtr(Result, SizeOf(TMethod(Method).Code), LONG_PTR(TMethod(Method).Data));
-    SetWindowLongPtr(Result, GWLP_WNDPROC, LONG_PTR(@StdWndProc));
-  end;
-end;
-
-
-
 
 { TVPNManager }
 
@@ -218,48 +137,41 @@ begin
   FKeepConnected := False;
   FPhoneBookPath := '';
 
-  //Acquire owner handle...
-  if AOwner is TWinControl then
-    FPHandle := (AOwner as TWinControl).Handle
-  else
-    FPHandle := GetForegroundWindow; //TODO: Is this safe?
-
-  //Load Rasdial Library...
-  FDll := SafeLoadLibrary(RADDIAL_DLL_FILENAME);
-  if FDll <> 0 then begin
-
-    //Acquire procedure addresses...
-    FRasDial := GetProcAddress(FDll, {$IFDEF UNICODE}'RasDialW'{$ELSE}'RasDialA'{$ENDIF UNICODE});
-    FRasEnumConnections := GetProcAddress(FDll, {$IFDEF UNICODE}'RasEnumConnectionsW'{$ELSE}'RasEnumConnectionsA'{$ENDIF UNICODE});
-    FRasEnumEntries := GetProcAddress(FDll, {$IFDEF UNICODE}'RasEnumEntriesW'{$ELSE}'RasEnumEntriesA'{$ENDIF UNICODE});
-    FRasGetConnectStatus := GetProcAddress(FDll, {$IFDEF UNICODE}'RasGetConnectStatusW'{$ELSE}'RasGetConnectStatusA'{$ENDIF UNICODE});
-    FRasGetErrorstring := GetProcAddress(FDll, {$IFDEF UNICODE}'RasGetErrorstringW'{$ELSE}'RasGetErrorstringA'{$ENDIF UNICODE});
-    FRasHangUp := GetProcAddress(FDll, {$IFDEF UNICODE}'RasHangUpW'{$ELSE}'RasHangUpA'{$ENDIF UNICODE});
-    FRasGetEntryDialParams := GetProcAddress(FDll, {$IFDEF UNICODE}'RasGetEntryDialParamsW'{$ELSE}'RasGetEntryDialParamsA'{$ENDIF UNICODE});
-    FRasValidateEntryName := GetProcAddress(FDll, {$IFDEF UNICODE}'RasValidateEntryNameW'{$ELSE}'RasValidateEntryNameA'{$ENDIF UNICODE});
-    FRasCreatePhonebookEntry := GetProcAddress(FDll, {$IFDEF UNICODE}'RasCreatePhonebookEntryW'{$ELSE}'RasCreatePhonebookEntryA'{$ENDIF UNICODE});
-    FRasEditPhonebookEntry := GetProcAddress(FDll, {$IFDEF UNICODE}'RasEditPhonebookEntryW'{$ELSE}'RasEditPhonebookEntryA'{$ENDIF UNICODE});
-
-    //Prepare events...
-    FHandle := AllocateHWndEx(WndProc);
-    FRASEvent := RegisterWindowMessage(RASDialEvent);
-    if FRASEvent = 0 then
-      FRASEvent := WM_RASDialEvent;
-
-  end;
-
-  //Check if Ras is available at all...
-  FAvailable := (FDll <> 0) and Assigned(FRasDial);
-
-
+  FRasApi:= CreateRasApi(Self, WndProc);
 
 end;
 
 destructor TVPNManager.Destroy;
 begin
+  if FRasApi.Available then begin
+    try
+      if not KeepConnected then begin
+        //HangUp;
+        //TODO: Hang up all connections...???
+        //  Actually this should be implemented on each one.
 
+      end;
+    except
+    end;
+  end;
+  DestroyRasApi(FRasApi);
   FreeAndNil(FConnections);
   inherited;
+end;
+
+function TVPNManager.GetAvailable: Boolean;
+begin
+  Result:= FRasApi.Available;
+end;
+
+function TVPNManager.ConnectionCount: Integer;
+begin
+  Result:= FConnections.Count;
+end;
+
+procedure TVPNManager.SetPhoneBookPath(const Value: TFilename);
+begin
+  FPhoneBookPath := Value;
 end;
 
 procedure TVPNManager.WndProc(var Msg: TMessage);
@@ -349,20 +261,12 @@ begin
   end
   else
   }
-    Msg.Result := DefWindowProc(FHandle, Msg.Msg, Msg.WParam, Msg.LParam);
-end;
-
-function TVPNManager.ConnectionCount: Integer;
-begin
-  Result:= FConnections.Count;
-end;
-
-procedure TVPNManager.SetPhoneBookPath(const Value: TFilename);
-begin
-  FPhoneBookPath := Value;
+    Msg.Result := DefWindowProc(FRasApi.Handle, Msg.Msg, Msg.WParam, Msg.LParam);
 end;
 
 procedure TVPNManager.RefreshConnections;
+const
+  GROW_SIZE = 50;
 var
   RASEntryName: array of TRasEntryName;
   Ret, I, BufSize, Entries: DWORD;
@@ -370,15 +274,15 @@ var
 begin
   if RasAvailable then begin
     FConnections.Clear;
-    if Assigned(FRasEnumEntries) then begin
+    if Assigned(FRasApi.EnumEntries) then begin
       repeat
-        SetLength(RASEntryName, Length(RASEntryName) + 50);
+        SetLength(RASEntryName, Length(RASEntryName) + GROW_SIZE);
         BufSize := Length(RASEntryName) * SizeOf(RASEntryName[0]);
         RASEntryName[0].dwSize := SizeOf(RASEntryName[0]);
         if FPhoneBookPath <> '' then
-          Ret := FRasEnumEntries(nil, PChar(FPhoneBookPath), @RASEntryName[0], BufSize, Entries)
+          Ret := FRasApi.EnumEntries(nil, PChar(FPhoneBookPath), @RASEntryName[0], BufSize, Entries)
         else
-          Ret := FRasEnumEntries(nil, nil, @RASEntryName[0], BufSize, Entries);
+          Ret := FRasApi.EnumEntries(nil, nil, @RASEntryName[0], BufSize, Entries);
       until Ret <> ERROR_BUFFER_TOO_SMALL;
       if Ret <> ERROR_SUCCESS then
         raise Exception.CreateFmt('Unable to enumerate RAS entries, Error code is %d', [Ret]);
@@ -425,25 +329,62 @@ begin
   FTitle := Value;
 end;
 
+function TVPNConnection.GetConnected: Boolean;
+begin
+  Result:= GetStatus.rasConnstate = RASCS_Connected;
+end;
+
 procedure TVPNConnection.GetInfo;
 var
-  RasDialParams: TRASDialParams;
-  Res: LongBool;
+  P: TRASDialParams;
 begin
   //Fetch detailed information about this VPN connection...
-  FillChar(RasDialParams, SizeOf(TRASDialParams), #0);
-  StrLCopy(RasDialParams.szEntryName, PChar(FTitle), RAS_MAXENTRYNAME);
-  RasDialParams.dwSize := SizeOf(TRASDialParams);
-  if Assigned(FOwner.FRasGetEntryDialParams) then
-    if FOwner.FRasGetEntryDialParams(nil, RasDialParams, Res) = 0 then
-      with RasDialParams do begin
-        FUsername := StrPas(szUserName);
-        FPassword := StrPas(szPassword);
-        FDomain := StrPas(szDomain);
-        FCallBackNumber := StrPas(szCallbackNumber);
-        FPhoneNumber := StrPas(szPhoneNumber);
-      end;
+  P:= GetDialParams;
+  FUsername:= StrPas(P.szUserName);
+  FPassword:= StrPas(P.szPassword);
+  FDomain:= StrPas(P.szDomain);
+  FCallbackNumber:= StrPas(P.szCallbackNumber);
+  FPhoneNumber:= StrPas(P.szPhoneNumber);
+end;
 
+function TVPNConnection.GetDialParams: TRASDialParams;
+var
+  R: Word;
+  Res: LongBool;
+begin
+  if FOwner.RasAvailable and Assigned(FOwner.FRasApi.GetEntryDialParams) then begin
+    FillChar(Result, SizeOf(TRASDialParams), #0);
+    StrLCopy(Result.szEntryName, PChar(FTitle), RAS_MAXENTRYNAME);
+    Result.dwSize := SizeOf(TRASDialParams);
+    R:= FOwner.FRasApi.GetEntryDialParams(nil, Result, Res);
+    case R of
+      ERROR_SUCCESS: ;
+      else begin
+        raise Exception.Create('Failed to get dial params: Error code '+IntToStr(R));
+      end;
+    end;
+  end;
+end;
+
+function TVPNConnection.GetStatus: TRASConnStatus;
+var
+  R: Word;
+begin
+  if FOwner.RasAvailable and Assigned(FOwner.FRasApi.GetConnectStatus) then begin
+    FillChar(Result, SizeOf(TRASConnStatus), #0);
+    Result.dwSize:= SizeOf(TRASConnStatus);
+    R:= FOwner.FRasApi.GetConnectStatus(FConn.rasConn, Result);
+    if R <> ERROR_SUCCESS then begin
+      case True of
+        ERROR_NOT_ENOUGH_MEMORY: begin
+          raise Exception.Create('Failed to get status: Not enough memory.');
+        end;
+        else begin
+          raise Exception.Create('Failed to get status: Error code '+IntToStr(R));
+        end;
+      end;
+    end;
+  end;
 end;
 
 end.
