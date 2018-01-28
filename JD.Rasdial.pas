@@ -119,12 +119,22 @@ type
 
   TVPNConnection = class(TObject)
   private
+    FOwner: TVPNManager;
     //FConn: TRASConn;
     FTitle: String;
+    FUsername: String;
+    FPassword: String;
+    FDomain: String;
+    FCallBackNumber: String;
+    FPhoneNumber: String;
+
     FConnected: Boolean;
     procedure SetTitle(const Value: String);
     procedure SetConnected(const Value: Boolean);
+    procedure GetInfo;
   public
+    constructor Create(AOwner: TVPNManager);
+    destructor Destroy; override;
     property Title: String read FTitle write SetTitle;
     property Connected: Boolean read FConnected write SetConnected;
   end;
@@ -143,7 +153,6 @@ const
     hbrBackground: 0;
     lpszMenuName: nil;
     lpszClassName: 'TPUtilWindowEx');
-
 
 function StdWndProc(Window: THandle; Message, WParam: WPARAM;
   LParam: LPARAM): LRESULT; stdcall;
@@ -198,6 +207,8 @@ begin
 end;
 
 
+
+
 { TVPNManager }
 
 constructor TVPNManager.Create(AOwner: TComponent);
@@ -207,27 +218,17 @@ begin
   FKeepConnected := False;
   FPhoneBookPath := '';
 
-  //FPassword := '';
-  //FDeviceName := '';
-  //FUsername := '';
-  //FEntry := '';
-  //FDeviceType := '';
-  //FPhoneNumber := '';
-  //FCallBackNumber := '';
-  //FDomain := '';
-  //FConnection := 0;
-
   //Acquire owner handle...
   if AOwner is TWinControl then
     FPHandle := (AOwner as TWinControl).Handle
   else
-    // (rom) is this safe?
-    FPHandle := GetForegroundWindow;
+    FPHandle := GetForegroundWindow; //TODO: Is this safe?
 
   //Load Rasdial Library...
   FDll := SafeLoadLibrary(RADDIAL_DLL_FILENAME);
-  if FDll <> 0 then
-  begin
+  if FDll <> 0 then begin
+
+    //Acquire procedure addresses...
     FRasDial := GetProcAddress(FDll, {$IFDEF UNICODE}'RasDialW'{$ELSE}'RasDialA'{$ENDIF UNICODE});
     FRasEnumConnections := GetProcAddress(FDll, {$IFDEF UNICODE}'RasEnumConnectionsW'{$ELSE}'RasEnumConnectionsA'{$ENDIF UNICODE});
     FRasEnumEntries := GetProcAddress(FDll, {$IFDEF UNICODE}'RasEnumEntriesW'{$ELSE}'RasEnumEntriesA'{$ENDIF UNICODE});
@@ -239,13 +240,19 @@ begin
     FRasCreatePhonebookEntry := GetProcAddress(FDll, {$IFDEF UNICODE}'RasCreatePhonebookEntryW'{$ELSE}'RasCreatePhonebookEntryA'{$ENDIF UNICODE});
     FRasEditPhonebookEntry := GetProcAddress(FDll, {$IFDEF UNICODE}'RasEditPhonebookEntryW'{$ELSE}'RasEditPhonebookEntryA'{$ENDIF UNICODE});
 
+    //Prepare events...
     FHandle := AllocateHWndEx(WndProc);
     FRASEvent := RegisterWindowMessage(RASDialEvent);
     if FRASEvent = 0 then
       FRASEvent := WM_RASDialEvent;
 
   end;
+
+  //Check if Ras is available at all...
   FAvailable := (FDll <> 0) and Assigned(FRasDial);
+
+
+
 end;
 
 destructor TVPNManager.Destroy;
@@ -259,7 +266,8 @@ procedure TVPNManager.WndProc(var Msg: TMessage);
 var
   X: Integer;
 begin
-  for X := 0 to Self.FConnections.Count-1 do begin
+  //TODO: Identify connection...
+  for X := 0 to FConnections.Count-1 do begin
 
 
   end;
@@ -360,19 +368,9 @@ var
   Ret, I, BufSize, Entries: DWORD;
   C: TVPNConnection;
 begin
-  { Build internal copy. }
-
-  if RasAvailable then
-  begin
-
+  if RasAvailable then begin
     FConnections.Clear;
-
-    if Assigned(FRasEnumEntries) then
-    begin
-      // We enumerate the RAS entries in a loop which allows us to use
-      // a dynamic array rather than a static one that may not be big
-      // enough to contain all the entries (Mantis 5079).
-      // We start with 50 which should be fine on most systems
+    if Assigned(FRasEnumEntries) then begin
       repeat
         SetLength(RASEntryName, Length(RASEntryName) + 50);
         BufSize := Length(RASEntryName) * SizeOf(RASEntryName[0]);
@@ -382,33 +380,41 @@ begin
         else
           Ret := FRasEnumEntries(nil, nil, @RASEntryName[0], BufSize, Entries);
       until Ret <> ERROR_BUFFER_TOO_SMALL;
-
       if Ret <> ERROR_SUCCESS then
         raise Exception.CreateFmt('Unable to enumerate RAS entries, Error code is %d', [Ret]);
-
-      I := 0;
-      while I < Entries do
-      begin
-        C:= TVPNConnection.Create;
-        try
-          if (RASEntryName[I].szEntryName[0] <> #0) then begin
+      //Populate list of VPN connections...
+      for I := 0 to Entries-1 do begin
+        if (RASEntryName[I].szEntryName[0] <> #0) then begin
+          C:= TVPNConnection.Create(Self);
+          try
             C.FTitle:= StrPas(RASEntryName[I].szEntryName);
+            C.GetInfo;
+          finally
             FConnections.Add(C);
           end;
-        finally
-          Inc(I);
         end;
       end;
     end;
-
   end;
 end;
 
 { TVPNConnection }
 
+constructor TVPNConnection.Create(AOwner: TVPNManager);
+begin
+  FOwner:= AOwner;
+
+end;
+
+destructor TVPNConnection.Destroy;
+begin
+
+  inherited;
+end;
+
 procedure TVPNConnection.SetConnected(const Value: Boolean);
 begin
-  //TODO...
+  //TODO: Connect or disconnect VPN...
 
   FConnected := Value;
 end;
@@ -417,6 +423,27 @@ procedure TVPNConnection.SetTitle(const Value: String);
 begin
   //TODO: Check if in edit mode.....
   FTitle := Value;
+end;
+
+procedure TVPNConnection.GetInfo;
+var
+  RasDialParams: TRASDialParams;
+  Res: LongBool;
+begin
+  //Fetch detailed information about this VPN connection...
+  FillChar(RasDialParams, SizeOf(TRASDialParams), #0);
+  StrLCopy(RasDialParams.szEntryName, PChar(FTitle), RAS_MAXENTRYNAME);
+  RasDialParams.dwSize := SizeOf(TRASDialParams);
+  if Assigned(FOwner.FRasGetEntryDialParams) then
+    if FOwner.FRasGetEntryDialParams(nil, RasDialParams, Res) = 0 then
+      with RasDialParams do begin
+        FUsername := StrPas(szUserName);
+        FPassword := StrPas(szPassword);
+        FDomain := StrPas(szDomain);
+        FCallBackNumber := StrPas(szCallbackNumber);
+        FPhoneNumber := StrPas(szPhoneNumber);
+      end;
+
 end;
 
 end.
