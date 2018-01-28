@@ -17,7 +17,7 @@ There is an installer script made in Inno Setup 5.5.9 Unicode. It's extremely si
 
 ## Tray Icon
 
-The application runs in a tray icon. When the application starts, by default, it will not show. It will only show an icon in the system tray. However, upon first startup, it will show so that the user can configure it for the first time. Otherwise, double-click on the tray icon, or right-click to use the popup menu.
+The application runs in a tray icon. When the application starts, by default, the configuration window will not show. It will only show an icon in the system tray. However, upon first startup, it will show the window so that the user can configure it for the first time. Otherwise, double-click on the tray icon, or right-click to use the popup menu.
 
 ## Select VPNs to Auto Connect
 
