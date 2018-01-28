@@ -1,6 +1,8 @@
 # JD VPN Manager
 Keep Windows VPNs Always Connected via Rasdial
 
+![alt text](JD-VPN-Manager.png "Screenshot")
+
 ## Summary
 
 This tool helps fix the problem introduced by the issues presented in the Windows VPN: They don't automatically connect. They require that a user interact to get a VPN to stay connected at all times. This tool automatically keeps select Windows VPN connections always connected, so that users don't have to explicitly connect.
@@ -24,6 +26,4 @@ Any Windows VPN configured will be listed when showing the app. Check on the che
 ## Start with Windows
 
 Use the switch on the right to start this application with Windows when you login.
-
-
 
