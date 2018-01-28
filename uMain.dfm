@@ -100,6 +100,16 @@ object frmMain: TfrmMain
     ThumbWidth = 20
     OnClick = chkStartWithWindowsClick
   end
+  object btnRefresh: TBitBtn
+    Left = 247
+    Top = 154
+    Width = 75
+    Height = 25
+    Anchors = [akTop, akRight]
+    Caption = 'Refresh'
+    TabOrder = 3
+    OnClick = btnRefreshClick
+  end
   object Ras: TJvRas32
     KeepConnected = True
     Left = 16

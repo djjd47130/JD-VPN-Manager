@@ -10,6 +10,12 @@ uses
   Vcl.Buttons, Vcl.Menus,
   System.Win.Registry, Vcl.WinXCtrls;
 
+const
+  REG_KEY = 'Software\JD Software\JD VPN Manager\';
+  RECON_KEY = REG_KEY + 'Auto Reconnect\';
+  DEF_RECONNECT_SECS = 20;
+  DEF_START_WITH_WINDOWS = tssOn;
+
 type
   TfrmMain = class(TForm)
     Ras: TJvRas32;
@@ -25,6 +31,7 @@ type
     Exit1: TMenuItem;
     chkStartWithWindows: TToggleSwitch;
     Label2: TLabel;
+    btnRefresh: TBitBtn;
     procedure FormCreate(Sender: TObject);
     procedure lstConnectionsItemChecked(Sender: TObject; Item: TListItem);
     procedure TmrTimer(Sender: TObject);
@@ -35,6 +42,7 @@ type
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure chkStartWithWindowsClick(Sender: TObject);
     procedure txtReconnectSecsChange(Sender: TObject);
+    procedure btnRefreshClick(Sender: TObject);
   private
     FDoClose: Boolean;
     FLoading: Boolean;
@@ -69,6 +77,12 @@ begin
   TmrTimer(nil);
 end;
 
+procedure TfrmMain.btnRefreshClick(Sender: TObject);
+begin
+  Self.Refresh;
+  Self.LoadPrefs;
+end;
+
 procedure TfrmMain.chkStartWithWindowsClick(Sender: TObject);
 begin
   if not FLoading then
@@ -101,12 +115,6 @@ begin
     Self.Hide;
   end;
 end;
-
-const
-  REG_KEY = 'Software\JD Software\JD VPN Manager\';
-  RECON_KEY = REG_KEY + 'Auto Reconnect\';
-  DEF_RECONNECT_SECS = 20;
-  DEF_START_WITH_WINDOWS = tssOn;
 
 procedure TfrmMain.LoadPrefs;
 var
@@ -282,6 +290,8 @@ begin
   finally
     lstConnections.Items.EndUpdate;
   end;
+  lstConnections.Width:= lstConnections.Width + 1;
+  lstConnections.Width:= lstConnections.Width - 1;
 end;
 
 procedure TfrmMain.ShowHide1Click(Sender: TObject);
