@@ -13,4 +13,8 @@ The Source Code is in Delphi 10.1 Berlin, but should work in most older versions
 
 There is an installer script made in Inno Setup 5.5.9 Unicode. It's extremely simple and has no actual pascal code.
 
+## Tray Icon
+
+The application runs in a tray icon. When the application starts, by default, it will not show. It will only show an icon in the system tray. However, upon first startup, it will show so that the user can configure it for the first time.
+
 
