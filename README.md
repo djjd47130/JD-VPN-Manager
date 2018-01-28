@@ -5,7 +5,7 @@ Keep Windows VPNs Always Connected via Rasdial
 
 ## Summary
 
-This tool helps fix the problem introduced by the issues presented in the Windows VPN: They don't automatically connect. They require that a user interact to get a VPN to stay connected at all times. This tool automatically keeps select Windows VPN connections always connected, so that users don't have to explicitly connect.
+This tool helps fix the issues presented in the Windows VPN: They don't automatically connect. They require that a user interact to get a VPN to stay connected at all times. This tool automatically keeps select Windows VPN connections always connected, so that users don't have to explicitly connect.
 
 ## Source Code
 
